@@ -17,24 +17,60 @@ import numpy as np
 import cv2
 from time import clock
 
+# hard coded parameters (beark... some of them need to be passed into init)
+# parameters of the Lucas-Kanade optical flow algorithm
 lk_params = dict( winSize  = (15, 15),
                   maxLevel = 2,
                   criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
 
+# parameters of the feature tracking algorithm
 feature_params = dict(maxCorners = 500,
                       qualityLevel = 0.05,  # decrease sensitivity
                       minDistance = 7,
                       blockSize = 7 )
 
+# parameters of the face tracking algorithm
 face_params = dict(scaleFactor=1.1, 
                    minNeighbors=5,
                    minSize=(30, 30),
                    flags=cv2.cv.CV_HAAR_SCALE_IMAGE)
 
+# face detection classifier
 face_cascade = cv2.CascadeClassifier('/usr/share/opencv/haarcascades/haarcascade_frontalface_default.xml')
 
 class PulseTracker:
     
+    '''
+        
+        Main class of the pulse detection project
+        
+        Parameters    
+        ----------
+            video_src : string, int
+                source of the video, if already recorded then provide the
+                full path of the video, else provide an int to use a webcam.
+                (see Capture Video from Camera in the OpenCV-Python tutorial)
+                
+            fps : int (default, 32)
+                frame per seconds
+            
+            crop_h : float (default, 0.45)
+                percentage of face cropping on the forehead
+                45% takes the nose and the mouth
+        
+        Attributes
+        ----------
+            tracks : list
+                coordinates of the tracked points for each frames
+            track_len : int
+                number of time samples (frames) to keep in tracks
+            capture : VideoCapture
+                an instance of openCV providing video from the camera
+            frame_idx : int
+                index of the current frame
+            face : (int, int, int, int)
+                face rectangle (x, y, height, width)
+    '''
     def __init__(self, video_src, fps=32., crop_h=.45):
         self.track_len = 10
         self.detect_interval = 5
@@ -118,6 +154,7 @@ class PulseTracker:
 def main():
     
     try:
+        # start tracking with the webcam
         pulse = PulseTracker(-1)
         pulse.run()
     except KeyboardInterrupt:
