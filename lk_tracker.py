@@ -31,7 +31,9 @@ face_params = dict(scaleFactor=1.1,
                    minSize=(30, 30),
                    flags=cv2.cv.CV_HAAR_SCALE_IMAGE)
 
-face_cascade = cv2.CascadeClassifier('/usr/share/opencv/haarcascades/haarcascade_frontalface_default.xml')
+cascade_path = '/usr/share/opencv/haarcascades/'
+cascade_path = '/Users/trachel.r/anaconda/pkgs/opencv-2.4.8-np17py27_2/share/OpenCV/haarcascades/'
+face_cascade = cv2.CascadeClassifier(cascade_path + 'haarcascade_frontalface_default.xml')
 
 class PulseTracker:
     
