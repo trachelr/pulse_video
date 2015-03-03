@@ -86,7 +86,12 @@ class PulseTracker:
         self.capture = cv2.VideoCapture(video_src)
         self.frame_idx  = 0
         self.face = ()
-        self.fps = fps
+        # try to guess fps from the camera first
+        if (video_src == -1) and (cap.get(cv2.cv.CV_CAP_PROP_FPS) != 0):
+            self.fps = cap.get(cv2.cv.CV_CAP_PROP_FPS)
+        else:
+            self.fps = fps
+        
         self.crop_h = crop_h
         # ------
         # signal processing attributes :
