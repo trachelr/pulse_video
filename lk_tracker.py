@@ -18,8 +18,6 @@ import cv2
 from time import clock
 from scipy import interpolate, signal, fftpack
 from sklearn.decomposition import PCA
-
-import numpy as np
 import pylab as plt
 #plt.interactive(True)
 
@@ -87,8 +85,8 @@ class PulseTracker:
         self.frame_idx  = 0
         self.face = ()
         # try to guess fps from the camera first
-        if (video_src == -1) and (cap.get(cv2.cv.CV_CAP_PROP_FPS) != 0):
-            self.fps = cap.get(cv2.cv.CV_CAP_PROP_FPS)
+        if (video_src == -1) and (self.capture.get(cv2.cv.CV_CAP_PROP_FPS) != 0):
+            self.fps = self.capture.get(cv2.cv.CV_CAP_PROP_FPS)
         else:
             self.fps = fps
         
@@ -189,7 +187,7 @@ class PulseTracker:
                 pca_tracks = self.pulse_pca.fit_transform(tracks.T)
 
                 # computing fourier transform of the components
-                freqs = fftpack.fftfreq(tnew.shape[0], 1/fs)
+                freqs = fftpack.fftfreq(lkeep, 1/fs)
                 fft_tracks = np.zeros([pca.n_components, sum(freqs > 0)])
                 for i in range(pca.n_components):
                     fft = fftpack.fft(pca_tracks[:,i])
