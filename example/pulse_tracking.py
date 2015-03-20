@@ -1,5 +1,6 @@
 import sys
-sys.path.insert(0,'/home/trachel/Projects/pulse')
+#sys.path.insert(0,'/home/trachel/Projects/pulse')
+sys.path.insert(0,'/Users/henri/GitHub/pulse_video')
 import cv2, time, scipy, sklearn
 from scipy import interpolate, signal, fftpack
 from sklearn.decomposition import PCA
@@ -9,19 +10,8 @@ import numpy as np
 import pylab as plt
 plt.interactive(True)
 
-video_path = '/data/mindwandering/video/p01/'
-video_list = ['MW_Video_Wed_Feb_18_16:11:20_2015.avi', 
-              'MW_Video_Wed_Feb_18_16:19:29_2015.avi',
-              'MW_Video_Wed_Feb_18_16:31:15_2015.avi', 
-              'MW_Video_Wed_Feb_18_16:46:38_2015.avi',
-              'MW_Video_Wed_Feb_18_16:57:10_2015.avi',
-              'MW_Video_Wed_Feb_18_17:11:42_2015.avi',
-              'MW_Video_Wed_Feb_18_17:27:13_2015.avi',
-              'MW_Video_Wed_Feb_18_17:44:19_2015.avi']
 
-video_name = video_list[-2]
-
-pulse = lk_tracker.PulseTracker(video_path + video_name)
+pulse = lk_tracker.PulseTracker(-1)
 
 # 10 seconds tracking
 pulse.track_len = 32*10

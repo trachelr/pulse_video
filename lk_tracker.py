@@ -36,12 +36,14 @@ feature_params = dict(maxCorners = 500,
 # parameters of the face tracking algorithm
 face_params = dict(scaleFactor=1.1, 
                    minNeighbors=5,
-                   minSize=(30, 30),
+                   minSize=(50, 50),
                    flags=cv2.cv.CV_HAAR_SCALE_IMAGE)
 
-cv_path = '/Users/trachel.r/anaconda/pkgs/opencv-2.4.8-np17py27_2/share/OpenCV/haarcascades/'
+# cv_path = '/Users/trachel.r/anaconda/pkgs/opencv-2.4.8-np17py27_2/share/OpenCV/haarcascades/'
 # cv_path = np.loadtxt('cv_path.conf')
-face_cascade = cv2.CascadeClassifier(cv_path + 'haarcascades/haarcascade_frontalface_default.xml')
+# cv_path Henri
+cv_path = '/usr/local/share/OpenCV/haarcascades'
+face_cascade = cv2.CascadeClassifier(cv_path + '/haarcascade_frontalface_default.xml')
 
 class PulseTracker:
     
@@ -156,18 +158,20 @@ class PulseTracker:
                 faces = face_cascade.detectMultiScale(f0_gray, **face_params)
                 if len(faces) > 0:
                     # get face coordinates
-                    (x, y, w, h) = self.crop_face(faces[0])
+                    #(x, y, w, h) = self.crop_face(faces[0])
+                    (x, y, w, h) = faces[0]
                     cv2.rectangle(vis, (x,y), (x+w,y+h),(0,255,0),2)
                     
-                    mask = np.zeros_like(f0_gray)
-                    mask[x:x+h, y:y+w] = 255
-                    for x, y in [np.int32(tr[-1]) for tr in self.tracks]:
-                        cv2.circle(mask, (x, y), 5, 0, -1)
+                    mask = np.ones_like(f0_gray)*255
+                    mask[x:x+w, y:y+h] = 0
+                    for xx, yy in [np.int32(tr[-1]) for tr in self.tracks]:
+                        cv2.circle(mask, (xx, yy), 5, 0, -1)
                     # Get the good features to track in the face
-                    p = cv2.goodFeaturesToTrack(f0_gray, mask = mask, **feature_params)
+                    xf, yf, wf, hf = faces[0]
+                    p = cv2.goodFeaturesToTrack(f0_gray[xf:xf+wf, yf:yf+hf] , mask = None, **feature_params)
                     if p is not None:
-                        for x, y in np.float32(p).reshape(-1, 2):
-                            self.tracks.append([(x, y)])
+                        for xx, yy in np.float32(p).reshape(-1, 2):
+                            self.tracks.append([(xf+xx, yf+yy)])
             
             # compute length of the tracks
             ltracks = np.array([len(x) for x in self.tracks])
@@ -196,13 +200,12 @@ class PulseTracker:
                 freqs = freqs[freqs > 0]
                 plt.plot(freqs[freqs < 20], fft_tracks[:, freqs < 20].T)
                 plt.legend(['pca%i' %(i+1) for i in range(pca.n_components)])
-                
             
             self.frame_idx += 1
             self.prev_gray = f0_gray
             cv2.imshow('lk_track', vis)
 
-            ch = 0xFF & cv2.waitKey()
+            ch = 0xFF & cv2.waitKey(1)
             if ch == 27:
                 break
     
