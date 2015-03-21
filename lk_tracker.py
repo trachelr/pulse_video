@@ -39,10 +39,10 @@ face_params = dict(scaleFactor=1.1,
                    minSize=(50, 50),
                    flags=cv2.cv.CV_HAAR_SCALE_IMAGE)
 
-# cv_path = '/Users/trachel.r/anaconda/pkgs/opencv-2.4.8-np17py27_2/share/OpenCV/haarcascades/'
-# cv_path = np.loadtxt('cv_path.conf')
+cv_path = '/Users/trachel.r/anaconda/pkgs/opencv-2.4.8-np17py27_2/share/OpenCV/haarcascades/'
+#cv_path = np.loadtxt('cv_path.conf')
 # cv_path Henri
-cv_path = '/usr/local/share/OpenCV/haarcascades'
+#cv_path = '/usr/local/share/OpenCV/haarcascades'
 face_cascade = cv2.CascadeClassifier(cv_path + '/haarcascade_frontalface_default.xml')
 
 class PulseTracker:
@@ -92,7 +92,10 @@ class PulseTracker:
         else:
             self.fps = fps
         
+        # height (percent) cropping
         self.crop_h = crop_h
+        # face position
+        self.face_pos = (0, 0, 0, 0)
         # ------
         # signal processing attributes :
         # ------
@@ -156,22 +159,28 @@ class PulseTracker:
             if self.frame_idx % self.detect_interval == 0:
                 # find the face
                 faces = face_cascade.detectMultiScale(f0_gray, **face_params)
+                sizes = [h*w for x, y, w, h in faces]
                 if len(faces) > 0:
+                    sel_face = np.argmax(sizes)
+                    self.face = faces[sel_face]
                     # get face coordinates
-                    #(x, y, w, h) = self.crop_face(faces[0])
-                    (x, y, w, h) = faces[0]
-                    cv2.rectangle(vis, (x,y), (x+w,y+h),(0,255,0),2)
-                    
+                    (x, y, w, h) = self.crop_face(self.face)
+                    # and save it
+                    self.face_pos = (x, y, w, h)
                     mask = np.ones_like(f0_gray)*255
                     mask[x:x+w, y:y+h] = 0
                     for xx, yy in [np.int32(tr[-1]) for tr in self.tracks]:
                         cv2.circle(mask, (xx, yy), 5, 0, -1)
                     # Get the good features to track in the face
-                    xf, yf, wf, hf = faces[0]
-                    p = cv2.goodFeaturesToTrack(f0_gray[xf:xf+wf, yf:yf+hf] , mask = None, **feature_params)
+                    face_gray = f0_gray[x:x+w, y:y+h]
+                    p = cv2.goodFeaturesToTrack(face_gray , mask = None, **feature_params)
                     if p is not None:
                         for xx, yy in np.float32(p).reshape(-1, 2):
-                            self.tracks.append([(xf+xx, yf+yy)])
+                            self.tracks.append([(x+xx, y+yy)])
+            
+            (x, y, w, h) = self.face_pos
+            #(x, y, w, h) = faces[0]
+            cv2.rectangle(vis, (x,y), (x+w,y+h),(0,255,0),2)
             
             # compute length of the tracks
             ltracks = np.array([len(x) for x in self.tracks])
