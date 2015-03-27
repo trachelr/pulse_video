@@ -15,7 +15,7 @@ Date   : 02/19/2015
 
 import numpy as np
 import cv2
-from time import clock
+import time
 from scipy import interpolate, signal, fftpack
 from sklearn.decomposition import PCA
 import pylab as plt
@@ -29,21 +29,17 @@ lk_params = dict( winSize  = (15, 15),
 
 # parameters of the feature tracking algorithm
 feature_params = dict(maxCorners = 500,
-                      qualityLevel = 0.05,  # decrease sensitivity
+                      qualityLevel = 0.03,  # decrease sensitivity
                       minDistance = 7,
                       blockSize = 7 )
 
 # parameters of the face tracking algorithm
 face_params = dict(scaleFactor=1.1, 
                    minNeighbors=5,
-                   minSize=(50, 50),
+                   minSize=(80, 80),
                    flags=cv2.cv.CV_HAAR_SCALE_IMAGE)
 
-cv_path = '/Users/trachel.r/anaconda/pkgs/opencv-2.4.8-np17py27_2/share/OpenCV/haarcascades/'
-#cv_path = np.loadtxt('cv_path.conf')
-# cv_path Henri
-#cv_path = '/usr/local/share/OpenCV/haarcascades'
-face_cascade = cv2.CascadeClassifier(cv_path + '/haarcascade_frontalface_default.xml')
+face_cascade = cv2.CascadeClassifier('haarcascade/haarcascade_frontalface_default.xml')
 
 class PulseTracker:
     
@@ -83,6 +79,7 @@ class PulseTracker:
         self.detect_interval = 5
         self.beat_interval = 20
         self.tracks  = []
+        self.times   = []
         self.capture = cv2.VideoCapture(video_src)
         self.frame_idx  = 0
         self.face = ()
@@ -122,6 +119,7 @@ class PulseTracker:
     
     def run(self):
         while self.capture.isOpened():
+            t0 = time.time()
             # getting a frame
             ret, frame = self.capture.read()
             # convert into gray scale
@@ -129,8 +127,7 @@ class PulseTracker:
             # make a copy for visualization
             vis = frame.copy()
             # apply face detection
-            faces = face_cascade.detectMultiScale(f0_gray, **face_params)
-            
+            # faces = face_cascade.detectMultiScale(f0_gray, **face_params)
             if len(self.tracks) > 0:
                 img0, img1 = self.prev_gray, f0_gray
                 # get tracking points
@@ -154,7 +151,7 @@ class PulseTracker:
                 self.tracks = new_tracks
                 cv2.polylines(vis, [np.int32(tr) for tr in self.tracks], False, (0, 255, 0))
                 print 'track count: %d' % len(self.tracks)
-            
+                print time.time()-t0
             
             if self.frame_idx % self.detect_interval == 0:
                 # find the face
@@ -167,19 +164,19 @@ class PulseTracker:
                     (x, y, w, h) = self.crop_face(self.face)
                     # and save it
                     self.face_pos = (x, y, w, h)
-                    mask = np.ones_like(f0_gray)*255
-                    mask[x:x+w, y:y+h] = 0
+                    mask = np.zeros_like(f0_gray)*255
+                    # mask[x:x+w, y:y+h] = 0
                     for xx, yy in [np.int32(tr[-1]) for tr in self.tracks]:
                         cv2.circle(mask, (xx, yy), 5, 0, -1)
                     # Get the good features to track in the face
-                    face_gray = f0_gray[x:x+w, y:y+h]
+                    face_gray = f0_gray[x:x+h, y:y+w]
                     p = cv2.goodFeaturesToTrack(face_gray , mask = None, **feature_params)
                     if p is not None:
                         for xx, yy in np.float32(p).reshape(-1, 2):
                             self.tracks.append([(x+xx, y+yy)])
             
+            # display the face
             (x, y, w, h) = self.face_pos
-            #(x, y, w, h) = faces[0]
             cv2.rectangle(vis, (x,y), (x+w,y+h),(0,255,0),2)
             
             # compute length of the tracks
@@ -213,7 +210,10 @@ class PulseTracker:
             self.frame_idx += 1
             self.prev_gray = f0_gray
             cv2.imshow('lk_track', vis)
-
+            dt = time.time() - t0
+            if 1/self.fps - dt > 0:
+                time.sleep(1/self.fps - dt)
+            
             ch = 0xFF & cv2.waitKey(1)
             if ch == 27:
                 break

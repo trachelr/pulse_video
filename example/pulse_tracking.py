@@ -1,6 +1,6 @@
 import sys
-#sys.path.insert(0,'/home/trachel/Projects/pulse')
-sys.path.insert(0,'/Users/henri/GitHub/pulse_video')
+sys.path.insert(0,'/home/trachel/Projects/pulse')
+#sys.path.insert(0,'/Users/henri/GitHub/pulse_video')
 import cv2, time, scipy, sklearn
 from scipy import interpolate, signal, fftpack
 from sklearn.decomposition import PCA
@@ -20,7 +20,7 @@ pulse.run()
 # compute length of the tracks
 ltracks = np.array([len(x) for x in pulse.tracks])
 # length to keep
-lkeep   = 319
+lkeep   = 50
 # number of track keeped
 nkeep   = sum(ltracks > lkeep)
 # select track of length >= 101
@@ -29,10 +29,11 @@ for i in(ltracks > lkeep).nonzero()[0]:
     track = np.array(pulse.tracks[i])
     sel_tracks[i] = track[-lkeep:, 1]
 
-t = np.linspace(0, lkeep/32., lkeep)
+t = np.linspace(0, lkeep/pulse.fps, lkeep)
 
 # frequency sampling
 fs = 250.
+fs = 32.
 # filter order
 order = 5
 # freq start 
@@ -42,12 +43,12 @@ fstop  = 5 # >> 120 bpm
                              btype='bandpass')
 
 # interpolate at fs and filter
-tnew = np.linspace(0, lkeep/32., int(fs*lkeep/32.))
-tracks = np.zeros([nkeep, int(fs*lkeep/32.)])
+tnew = np.linspace(0, lkeep/pulse.fps, int(fs*lkeep/pulse.fps))
+tracks = np.zeros([nkeep, int(fs*lkeep/pulse.fps)])
 for i in range(nkeep):
     y = sel_tracks[i]
-    ynew  = interpolate.spline(t, y, tnew)
-    yfilt = signal.filtfilt(b, a, ynew)
+    #ynew  = interpolate.spline(t, y, tnew)
+    yfilt = signal.filtfilt(b, a, y)
     tracks[i] = yfilt
 
 # computing PCA decomposition
@@ -55,7 +56,7 @@ pca = PCA(n_components=10)
 pca_tracks = pca.fit_transform(tracks.T)
 
 # computing fourier transform of the components
-freqs = fftpack.fftfreq(tnew.shape[0], 1/fs)
+freqs = fftpack.fftfreq(pca_tracks.shape[0], 1/fs)
 fft_tracks = np.zeros([pca.n_components, sum(freqs > 0)])
 for i in range(pca.n_components):
     fft = fftpack.fft(pca_tracks[:,i])
