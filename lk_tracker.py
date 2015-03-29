@@ -119,7 +119,7 @@ class PulseTracker:
     
     def run(self):
         # print times t1, t2, t3 and stop other print
-        timing_debug = True
+        timing_debug = False
         while self.capture.isOpened():
             t0 = time.time()
             t1, t2, t3 = 0, 0, 0
