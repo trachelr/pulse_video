@@ -29,7 +29,7 @@ lk_params = dict( winSize  = (35, 35),
 
 # parameters of the feature tracking algorithm
 feature_params = dict(maxCorners = 500,
-                      qualityLevel = 0.35,  # decrease sensitivity
+                      qualityLevel = 0.75,  # decrease sensitivity
                       minDistance = 7,
                       blockSize = 7 )
 
@@ -99,7 +99,7 @@ class PulseTracker:
         # frequency sampling
         self.pulse_fs = 250.
         # filter order
-        self.ford = 5
+        self.ford = 6
         # freq start 
         self.fstart = 0.75 # ie 45 bpm
         self.fstop  = 5 # >> 120 bpm
@@ -118,8 +118,11 @@ class PulseTracker:
         return face[0]+5, face[1]+fh, face[2]-10, face[3]-fh
     
     def run(self):
+        # print times t1, t2, t3 and stop other print
+        timing_debug = True
         while self.capture.isOpened():
             t0 = time.time()
+            t1, t2, t3 = 0, 0, 0
             # getting a frame
             ret, frame = self.capture.read()
             # convert into gray scale
@@ -129,11 +132,12 @@ class PulseTracker:
             if len(self.tracks) > 0:
                 img0, img1 = self.prev_gray, f0_gray
                 # get tracking points
+                t1 = time.time() - t0
                 p0 = np.float32([tr[-1] for tr in self.tracks]).reshape(-1, 1, 2)
                 # apply Lucas-Kanade tracker with optical flow
                 p1, st, err = cv2.calcOpticalFlowPyrLK(img0, img1, p0, None, **lk_params)
                 p0r, st, err = cv2.calcOpticalFlowPyrLK(img1, img0, p1, None, **lk_params)
-                
+                t2 = time.time() - t0
                 d = abs(p0-p0r).reshape(-1, 2).max(-1)
                 good = d < 1
                 new_tracks = []
@@ -146,6 +150,7 @@ class PulseTracker:
                     new_tracks.append(tr)
                     cv2.circle(vis, (x, y), 2, (0, 255, 0), -1)
                 
+                t3 = time.time() - t0
                 self.tracks = new_tracks
                 cv2.polylines(vis, [np.int32(tr) for tr in self.tracks], False, (0, 255, 0))
             
@@ -160,10 +165,6 @@ class PulseTracker:
                     (x, y, w, h) = self.crop_face(self.face)
                     # and save it
                     self.face_pos = (x, y, w, h)
-                    mask = np.zeros_like(f0_gray)*255
-                    # mask[x:x+w, y:y+h] = 0
-                    for xx, yy in [np.int32(tr[-1]) for tr in self.tracks]:
-                        cv2.circle(mask, (xx, yy), 5, 0, -1)
                     # Get the good features to track in the face
                     face_gray = f0_gray[x:x+h, y:y+w]
                     p = cv2.goodFeaturesToTrack(face_gray , mask = None, **feature_params)
@@ -174,15 +175,16 @@ class PulseTracker:
             # display the face
             (x, y, w, h) = self.face_pos
             cv2.rectangle(vis, (x,y), (x+w,y+h),(0,255,0),2)
-            
             # compute length of the tracks
             ltracks = np.array([len(x) for x in self.tracks])
             # number of track keeped
             nkeep   = sum(ltracks >= self.track_len)
             # compute pulse rate
             if self.frame_idx % self.beat_interval == 0 and nkeep > 10:
-                print '---  starting pulse '
-                print 'track count: %d' % len(self.tracks)
+                if not timing_debug:
+                    print '---  starting pulse '
+                    print 'track count: %d' % len(self.tracks)
+                
                 # select track of length >= 101
                 tracks = np.zeros([nkeep, self.track_len])
                 for i in(ltracks == self.track_len).nonzero()[0]:
@@ -210,10 +212,13 @@ class PulseTracker:
             self.prev_gray = f0_gray
             cv2.imshow('lk_track', vis)
             dt = time.time() - t0
-            if 1/self.fps - dt > 0:
+            islate = 1/self.fps - dt < 0
+            if not islate:
                 time.sleep(1/self.fps - dt)
-            else:
+            elif islate and not timing_debug:
                 print '%.3f ms delayed' %(dt - 1/self.fps)
+            elif timing_debug:
+                print (len(self.tracks), t1, t2, t3)
             
             ch = 0xFF & cv2.waitKey(1)
             if ch == 27:
@@ -228,7 +233,7 @@ def main():
         # start tracking with the webcam
         pulse = PulseTracker(-1)
         # buffer of 10sec @16fps
-        pulse.track_len = 16*10
+        pulse.track_len = 16*30
         # run main program
         pulse.run()
     except KeyboardInterrupt:
