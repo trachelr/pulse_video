@@ -19,17 +19,17 @@ import time
 from scipy import interpolate, signal, fftpack
 from sklearn.decomposition import PCA
 import pylab as plt
-#plt.interactive(True)
+plt.interactive(True)
 
 # hard coded parameters (beark... some of them need to be passed into init)
 # parameters of the Lucas-Kanade optical flow algorithm
-lk_params = dict( winSize  = (15, 15),
+lk_params = dict( winSize  = (35, 35),
                   maxLevel = 2,
                   criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
 
 # parameters of the feature tracking algorithm
 feature_params = dict(maxCorners = 500,
-                      qualityLevel = 0.03,  # decrease sensitivity
+                      qualityLevel = 0.35,  # decrease sensitivity
                       minDistance = 7,
                       blockSize = 7 )
 
@@ -74,9 +74,9 @@ class PulseTracker:
             face : (int, int, int, int)
                 face rectangle (x, y, height, width)
     '''
-    def __init__(self, video_src, fps=32., crop_h=.45):
-        self.track_len = 10
-        self.detect_interval = 5
+    def __init__(self, video_src, fps=16., crop_h=.45):
+        self.track_len = 32
+        self.detect_interval = 10
         self.beat_interval = 20
         self.tracks  = []
         self.times   = []
@@ -126,8 +126,6 @@ class PulseTracker:
             f0_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             # make a copy for visualization
             vis = frame.copy()
-            # apply face detection
-            # faces = face_cascade.detectMultiScale(f0_gray, **face_params)
             if len(self.tracks) > 0:
                 img0, img1 = self.prev_gray, f0_gray
                 # get tracking points
@@ -150,8 +148,6 @@ class PulseTracker:
                 
                 self.tracks = new_tracks
                 cv2.polylines(vis, [np.int32(tr) for tr in self.tracks], False, (0, 255, 0))
-                print 'track count: %d' % len(self.tracks)
-                print time.time()-t0
             
             if self.frame_idx % self.detect_interval == 0:
                 # find the face
@@ -181,15 +177,15 @@ class PulseTracker:
             
             # compute length of the tracks
             ltracks = np.array([len(x) for x in self.tracks])
-            # length to keep
-            lkeep   = self.track_len
             # number of track keeped
-            nkeep   = sum(ltracks > lkeep)
+            nkeep   = sum(ltracks >= self.track_len)
             # compute pulse rate
-            if self.frame_idx % self.beat_interval == 0 and nkeep > 0:
+            if self.frame_idx % self.beat_interval == 0 and nkeep > 10:
+                print '---  starting pulse '
+                print 'track count: %d' % len(self.tracks)
                 # select track of length >= 101
-                tracks = np.zeros([nkeep, lkeep])
-                for i in(ltracks == lkeep).nonzero()[0]:
+                tracks = np.zeros([nkeep, self.track_len])
+                for i in(ltracks == self.track_len).nonzero()[0]:
                     track = np.array(self.tracks[i])
                     # keep only y coordinates !!!
                     tracks[i] = track[:, 1]
@@ -197,15 +193,18 @@ class PulseTracker:
                 pca_tracks = self.pulse_pca.fit_transform(tracks.T)
 
                 # computing fourier transform of the components
-                freqs = fftpack.fftfreq(lkeep, 1/fs)
-                fft_tracks = np.zeros([pca.n_components, sum(freqs > 0)])
-                for i in range(pca.n_components):
+                n_comp = self.pulse_pca.n_components
+                freqs = fftpack.fftfreq(self.track_len, 1/(self.fps*1.))
+                fft_tracks = np.zeros([n_comp, sum(freqs > 0)])
+                for i in range(n_comp):
                     fft = fftpack.fft(pca_tracks[:,i])
                     fft_tracks[i] = np.abs(fft[freqs > 0])
 
                 freqs = freqs[freqs > 0]
-                plt.plot(freqs[freqs < 20], fft_tracks[:, freqs < 20].T)
-                plt.legend(['pca%i' %(i+1) for i in range(pca.n_components)])
+                fmax  = np.argmax(fft_tracks[0])
+                plt.plot(freqs[freqs < 20], fft_tracks[0, freqs < 20].T)
+                plt.legend(['pca%i' %(i+1) for i in range(n_comp)])
+                plt.title('BPM %.3f' %(freqs[fmax]*60))
             
             self.frame_idx += 1
             self.prev_gray = f0_gray
@@ -213,6 +212,8 @@ class PulseTracker:
             dt = time.time() - t0
             if 1/self.fps - dt > 0:
                 time.sleep(1/self.fps - dt)
+            else:
+                print '%.3f ms delayed' %(dt - 1/self.fps)
             
             ch = 0xFF & cv2.waitKey(1)
             if ch == 27:
@@ -226,6 +227,9 @@ def main():
     try:
         # start tracking with the webcam
         pulse = PulseTracker(-1)
+        # buffer of 10sec @16fps
+        pulse.track_len = 16*10
+        # run main program
         pulse.run()
     except KeyboardInterrupt:
         pulse.close()

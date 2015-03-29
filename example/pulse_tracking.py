@@ -14,7 +14,7 @@ plt.interactive(True)
 pulse = lk_tracker.PulseTracker(-1)
 
 # 10 seconds tracking
-pulse.track_len = 32*10
+pulse.track_len = 16*10
 pulse.run()
 
 # compute length of the tracks
@@ -22,7 +22,7 @@ ltracks = np.array([len(x) for x in pulse.tracks])
 # length to keep
 lkeep   = 50
 # number of track keeped
-nkeep   = sum(ltracks > lkeep)
+nkeep   = sum(ltracks >= lkeep)
 # select track of length >= 101
 sel_tracks = np.zeros([nkeep, lkeep])
 for i in(ltracks > lkeep).nonzero()[0]:
