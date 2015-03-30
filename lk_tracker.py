@@ -16,7 +16,7 @@ Date   : 02/19/2015
 import numpy as np
 import cv2
 import time
-from scipy import interpolate, signal, fftpack
+from scipy import interpolate, signal, fftpack, optimize
 from sklearn.decomposition import PCA
 import pylab as plt
 plt.interactive(True)
@@ -29,7 +29,7 @@ lk_params = dict( winSize  = (35, 35),
 
 # parameters of the feature tracking algorithm
 feature_params = dict(maxCorners = 500,
-                      qualityLevel = 0.75,  # decrease sensitivity
+                      qualityLevel = 0.35,  # decrease sensitivity
                       minDistance = 7,
                       blockSize = 7 )
 
@@ -40,6 +40,10 @@ face_params = dict(scaleFactor=1.1,
                    flags=cv2.cv.CV_HAAR_SCALE_IMAGE)
 
 face_cascade = cv2.CascadeClassifier('haarcascade/haarcascade_frontalface_default.xml')
+
+# gaussian function used to find BPM on the FFT
+def gauss_func(x, a, x0, sigma):
+    return a*np.exp(-(x-x0)**2/(2*sigma**2))
 
 class PulseTracker:
     
@@ -74,8 +78,8 @@ class PulseTracker:
             face : (int, int, int, int)
                 face rectangle (x, y, height, width)
     '''
-    def __init__(self, video_src, fps=16., crop_h=.45):
-        self.track_len = 32
+    def __init__(self, video_src, track_len=32, fps=5., crop_height=.45):
+        self.track_len = track_len
         self.detect_interval = 10
         self.beat_interval = 20
         self.tracks  = []
@@ -90,7 +94,8 @@ class PulseTracker:
             self.fps = fps
         
         # height (percent) cropping
-        self.crop_h = crop_h
+        self.crop_height = crop_height
+        self.crop_width = .5
         # face position
         self.face_pos = (0, 0, 0, 0)
         # ------
@@ -111,15 +116,39 @@ class PulseTracker:
         self._filter_b, self._filter_a = b, a
         # create PCA
         self.pulse_pca = PCA(n_components=10)
+        
+        # ------------------------
+        #  plot fft + gaussian
+        # ------------------------
+        fig  = plt.figure()
+        plt.xlabel('pulse/min')
+        plt.ylabel('power spectral density')
+        axes = fig.add_subplot(111)
+        axes.set_autoscale_on(True)
+        axes.autoscale_view(True, True, True)
+        freqs = fftpack.fftfreq(self.track_len, 1/(self.fps*1.))
+        freqs = freqs[freqs > 0]
+        # take lower frequency and convert in BPM
+        freqs = freqs[freqs < 5]*60 
+        self.pca_lines = [axes.plot(freqs, np.zeros_like(freqs))[0] for a in range(5)]
+        #self.gau_line, = axes.plot(freqs, np.zeros_like(freqs), 'b--')
+        
     
-    def crop_face(self, face):
-        fh = int(face[3] * self.crop_h)
+    def crop_top_face(self, face):
+        fh = int(face[3] * self.crop_height)
+        fw = int(face[2] * self.crop_width)
         # remove the forehead and crop the face tracking rectangle
-        return face[0]+5, face[1]+fh, face[2]-10, face[3]-fh
+        return face[0]+fw/2, face[1]+fh, face[2]-fw, face[3]-fh
+    
+    def crop_bottom_face(self, face):
+        fh = int(face[3] * (self.crop_height-.25))
+        fw = int(face[2] * self.crop_width)
+        return face[0]+fw/2, face[1], face[2]-fw, fh
     
     def run(self):
+        print 'runing calibration (waiting %.3f sec)' %(self.track_len/(1.*self.fps))
         # print times t1, t2, t3 and stop other print
-        timing_debug = False
+        timing_debug = True
         while self.capture.isOpened():
             t0 = time.time()
             t1, t2, t3 = 0, 0, 0
@@ -162,7 +191,8 @@ class PulseTracker:
                     sel_face = np.argmax(sizes)
                     self.face = faces[sel_face]
                     # get face coordinates
-                    (x, y, w, h) = self.crop_face(self.face)
+                    (x, y, w, h) = self.crop_top_face(self.face)
+                    #(x, y, w, h) = self.crop_bottom_face(self.face)
                     # and save it
                     self.face_pos = (x, y, w, h)
                     # Get the good features to track in the face
@@ -190,7 +220,7 @@ class PulseTracker:
                 for i in(ltracks == self.track_len).nonzero()[0]:
                     track = np.array(self.tracks[i])
                     # keep only y coordinates !!!
-                    tracks[i] = track[:, 1]
+                    tracks[i] = signal.filtfilt(self._filter_b, self._filter_a, track[:, 1])
 
                 pca_tracks = self.pulse_pca.fit_transform(tracks.T)
 
@@ -203,15 +233,29 @@ class PulseTracker:
                     fft_tracks[i] = np.abs(fft[freqs > 0])
 
                 freqs = freqs[freqs > 0]
+                fft_tracks = fft_tracks[:, freqs > 0]
+                # fit a gaussian on the 1st component
+                #try:
+                #    popt, pcov = optimize.curve_fit(gauss_func, freqs, fft_tracks[0])
+                #    bpm_prob = gauss_func(freqs, popt[0], popt[1], popt[2])
+                #    fmax  = np.argmax(bpm_prob)
+                #    self.gau_line.set_data(freqs[freqs < 20], bpm_prob[freqs < 20])
+                #except RuntimeError:
                 fmax  = np.argmax(fft_tracks[0])
-                plt.plot(freqs[freqs < 20], fft_tracks[0, freqs < 20].T)
+                #self.fft_line.set_data(freqs[freqs < 5]*60, fft_tracks[0, freqs < 20].T)
+                for a in range(5):
+                    self.pca_lines[a].set_data(freqs[freqs < 5]*60, fft_tracks[a, freqs < 5].T)
+                
                 plt.legend(['pca%i' %(i+1) for i in range(n_comp)])
                 plt.title('BPM %.3f' %(freqs[fmax]*60))
+                plt.ylim([0, np.ceil(fft_tracks[0].max())])
             
             self.frame_idx += 1
             self.prev_gray = f0_gray
             cv2.imshow('lk_track', vis)
+            
             dt = time.time() - t0
+            
             islate = 1/self.fps - dt < 0
             if not islate:
                 time.sleep(1/self.fps - dt)
@@ -232,8 +276,8 @@ def main():
     try:
         # start tracking with the webcam
         pulse = PulseTracker(-1)
-        # buffer of 10sec @16fps
-        pulse.track_len = 16*30
+        # buffer of 30sec @10fps
+        pulse.track_len = 30
         # run main program
         pulse.run()
     except KeyboardInterrupt:
