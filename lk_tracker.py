@@ -78,7 +78,7 @@ class PulseTracker:
             face : (int, int, int, int)
                 face rectangle (x, y, height, width)
     '''
-    def __init__(self, video_src, track_len=32, fps=5., crop_height=.45):
+    def __init__(self, video_src, track_len=32, fps=10., crop_height=.45):
         self.track_len = track_len
         self.detect_interval = 10
         self.beat_interval = 20
@@ -148,7 +148,7 @@ class PulseTracker:
     def run(self):
         print 'runing calibration (waiting %.3f sec)' %(self.track_len/(1.*self.fps))
         # print times t1, t2, t3 and stop other print
-        timing_debug = True
+        timing_debug = False
         while self.capture.isOpened():
             t0 = time.time()
             t1, t2, t3 = 0, 0, 0
@@ -277,7 +277,7 @@ def main():
         # start tracking with the webcam
         pulse = PulseTracker(-1)
         # buffer of 30sec @10fps
-        pulse.track_len = 30
+        pulse.track_len = 100
         # run main program
         pulse.run()
     except KeyboardInterrupt:

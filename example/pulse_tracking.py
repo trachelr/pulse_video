@@ -20,7 +20,7 @@ pulse.run()
 # compute length of the tracks
 ltracks = np.array([len(x) for x in pulse.tracks])
 # length to keep
-lkeep   = 50
+lkeep   = 150
 # number of track keeped
 nkeep   = sum(ltracks >= lkeep)
 # select track of length >= 101
@@ -43,8 +43,8 @@ fstop  = 5 # >> 120 bpm
                              btype='bandpass')
 
 # interpolate at fs and filter
-tnew = np.linspace(0, lkeep/pulse.fps, int(fs*lkeep/pulse.fps))
-tracks = np.zeros([nkeep, int(fs*lkeep/pulse.fps)])
+tnew = np.linspace(0, lkeep/pulse.fps, lkeep)
+tracks = np.zeros([nkeep, lkeep])
 for i in range(nkeep):
     y = sel_tracks[i]
     #ynew  = interpolate.spline(t, y, tnew)
